@@ -9,6 +9,18 @@
   ],
   "references": [
     {
+      "path": "../../fs/fs"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../session-query/session-query"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -25,6 +37,9 @@
     },
     {
       "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/tools"
     },
     {
       "path": "../../core/session"

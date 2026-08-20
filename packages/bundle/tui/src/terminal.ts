@@ -48,12 +48,41 @@ export interface TerminalIo {
   close(): void
 }
 
+/**
+ * Offer completions for the text left of the cursor.
+ * @param line - the line up to the cursor.
+ * @returns the candidate replacements and the substring they replace.
+ */
+export type TerminalCompleter = (line: string) => Promise<[string[], string]>
+
+/**
+ * Adapt a completer to readline's callback shape.
+ *
+ * readline treats a thrown or rejected completer as a failure of the keypress,
+ * so a failed listing settles as "no candidates" and leaves the typed line
+ * exactly as it was.
+ * @param complete - the completer to adapt.
+ * @returns the callback-shaped completer readline installs.
+ */
+export function toReadlineCompleter(
+  complete: TerminalCompleter,
+): (line: string, callback: (error: null, result: [string[], string]) => void) => void {
+  return (line, callback) => {
+    void complete(line).then(
+      (result) => { callback(null, result) },
+      () => { callback(null, [[], line]) },
+    )
+  }
+}
+
 /** Streams and flags the terminal is built over; tests substitute all of them. */
 export interface TerminalOptions {
   /** The input stream; raw mode is used only when it reports a TTY. */
   input: NodeJS.ReadableStream & { setRawMode?: (mode: boolean) => void; isTTY?: boolean }
   /** The output stream every rendered line is written to. */
   output: NodeJS.WritableStream & { isTTY?: boolean }
+  /** Tab completion; absent leaves the Tab key inserting whitespace. */
+  complete?: TerminalCompleter
 }
 
 /** ANSI helpers, resolved once against the output stream. */
@@ -89,9 +118,14 @@ export function createStyle(styled: boolean): TerminalStyle {
  * @returns the IO surface the frontend drives.
  */
 export function createTerminal(options: TerminalOptions): TerminalIo {
-  const { input, output } = options
+  const { input, output, complete } = options
   const interactive = input.isTTY === true && typeof input.setRawMode === 'function'
-  const rl: ReadlineInterface = createInterface({ input, output, terminal: input.isTTY === true })
+  const rl: ReadlineInterface = createInterface({
+    input,
+    output,
+    terminal: input.isTTY === true,
+    ...complete === undefined ? {} : { completer: toReadlineCompleter(complete) },
+  })
 
   let running = false
   let interruptHandler: (() => void) | undefined
@@ -101,9 +135,10 @@ export function createTerminal(options: TerminalOptions): TerminalIo {
     const text = typeof data === 'string' ? data : data.toString('utf8')
     const waiting = pendingKey
     if (waiting !== undefined) {
-      const match = [...text]
-        .map(character => character.toLowerCase())
-        .find(character => waiting.keys.includes(character))
+      // Offered keys are single characters, so a case-folded containment test
+      // settles the read without decomposing the chunk into code points.
+      const lowered = text.toLowerCase()
+      const match = waiting.keys.find(key => lowered.includes(key))
       if (match !== undefined) {
         pendingKey = undefined
         waiting.resolve(match)
@@ -134,17 +169,12 @@ export function createTerminal(options: TerminalOptions): TerminalIo {
     },
 
     async readLine(prompt: string): Promise<string | undefined> {
+      // Whichever of the two settles first wins: a second `resolve` on a
+      // settled promise is a no-op, so neither path needs its own guard.
       return new Promise((resolve) => {
-        let settled = false
-        const onClose = (): void => {
-          if (settled) return
-          settled = true
-          resolve(undefined)
-        }
+        const onClose = (): void => { resolve(undefined) }
         rl.once('close', onClose)
         rl.question(prompt, (line) => {
-          if (settled) return
-          settled = true
           rl.removeListener('close', onClose)
           resolve(line)
         })
@@ -170,6 +200,11 @@ export function createTerminal(options: TerminalOptions): TerminalIo {
       rl.pause()
       input.setRawMode?.(true)
       input.on('data', onData)
+      // `rl.pause()` pauses the input stream itself, and an explicitly paused
+      // stream does not re-enter flowing mode when a `data` listener is added.
+      // Without this resume no keypress reaches `onData`, so neither the
+      // interrupt nor an inline approval answer would ever arrive.
+      input.resume()
     },
 
     endTurn(): void {

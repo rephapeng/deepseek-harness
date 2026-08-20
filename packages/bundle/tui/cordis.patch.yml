@@ -38,3 +38,15 @@
     - id: tui-frontend
       name: '@deepseek-ai/dsh-tui'
       inject: [tuiStartup]
+      config:
+        # The startup row owns this app's command line; the frontend reads its
+        # resolved answers rather than parsing argv a second time.
+        cwd: !!js ctx.tuiStartup.cwd
+        resume: !!js ctx.tuiStartup.resume
+        # How many recent sessions `--resume` offers before the list is capped.
+        maxResumeSessions: 10
+        # A tool result carries no size promise, so this surface states its own
+        # bound. These suit a full-height terminal; a narrow log wants less.
+        toolOutput:
+          maxLines: 40
+          maxChars: 4000
