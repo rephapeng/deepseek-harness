@@ -1,0 +1,52 @@
+# The dsh-tui bundle patch: an interactive terminal surface directly over
+# dsh-base. It mounts no Host, HTTP server, Web runtime, or browser plugin.
+# A provider plugin injects `cmdlineArgs` and parses this app's own flags, then
+# the frontend creates one Agent through the core registry, streams its turns to
+# the terminal, and answers approval questions from the same keyboard.
+#
+# A patch replaces the targeted row's whole `config`, so each row below
+# restates every key it owns.
+
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+
+# The shared module-reload HMR row stays off for the same reason the other
+# surfaces disable it: the launcher's watch-only fallback keeps the user patch
+# layers live for the life of the session without reloading plugin modules
+# underneath an attached terminal.
+- id: hmr
+  disabled: true
+
+- id: tools
+  config:
+    # Keep the same temporary process-wide Code Mode opt-in as the other surfaces.
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+- insert:
+    # Code Mode is a core execution capability, not a Web component.
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: tui-startup
+      name: '@deepseek-ai/dsh-tui/startup'
+
+    # Injects the startup provider so the frontend mounts only after this app's
+    # command line was accepted: `dsh --profile tui --help` provides no service,
+    # so no terminal is attached and no Agent is created.
+    - id: tui-frontend
+      name: '@deepseek-ai/dsh-tui'
+      inject: [tuiStartup]
+      config:
+        # The startup row owns this app's command line; the frontend reads its
+        # resolved answers rather than parsing argv a second time.
+        cwd: !!js ctx.tuiStartup.cwd
+        resume: !!js ctx.tuiStartup.resume
+        # How many recent sessions `--resume` offers before the list is capped.
+        maxResumeSessions: 10
+        # A tool result carries no size promise, so this surface states its own
+        # bound. These suit a full-height terminal; a narrow log wants less.
+        toolOutput:
+          maxLines: 40
+          maxChars: 4000

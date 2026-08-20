@@ -2959,6 +2959,62 @@ export type ToolPresentationMode = 'native' | 'code' | 'both'
 
 来源：[`packages/core/tools/src/index.ts:654`](../packages/core/tools/src/index.ts)
 
+<a id="deepseek-aidsh-tui"></a>
+
+## `@deepseek-ai/dsh-tui`
+
+需要：`agentDefaultModel` · `agents` · `sessions`
+
+```ts config-catalog
+/** Terminal frontend configuration. */
+export interface Config {
+  /** The working directory this session is rooted at. */
+  cwd: string
+  /** Which session this invocation attaches to. */
+  resume: ResumeRequest
+  /** How many recent sessions the picker offers. */
+  maxResumeSessions: number
+  /**
+   * How much of one tool result this terminal draws. Required because no bound
+   * suits every deployment: a wide review terminal and a narrow CI log want
+   * different answers, and an unbounded result would flood the transcript.
+   */
+  toolOutput: OutputBounds
+}
+
+/** What the command line asked this terminal to attach to. */
+export type ResumeRequest =
+  | {
+    /** Start a fresh session; what an invocation naming no selection flag gets. */
+    readonly kind: 'new'
+  }
+  | {
+    /** Attach to the most recent eligible session without asking. */
+    readonly kind: 'latest'
+  }
+  | {
+    /** Attach to the one session named on the command line. */
+    readonly kind: 'session'
+    /** The session id to attach to, exactly as the command line supplied it. */
+    readonly sessionId: string
+  }
+  | {
+    /** Offer the eligible sessions and attach to the one chosen. */
+    readonly kind: 'pick'
+  }
+
+/** How much of one tool result this terminal draws. */
+export interface OutputBounds {
+  /** Maximum drawn lines; further lines are replaced by a count notice. */
+  maxLines: number
+  /** Maximum drawn characters, applied after the line bound. */
+  maxChars: number
+}
+```
+
+来源：[`packages/bundle/tui/src/index.ts:68`](../packages/bundle/tui/src/index.ts)
+
+
 <a id="deepseek-aidsh-typert-loader"></a>
 
 ## `@deepseek-ai/dsh-typert-loader`
